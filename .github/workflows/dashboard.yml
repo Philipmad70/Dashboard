@@ -1,9 +1,14 @@
 name: Byg dashboard
 
 on:
+  # Kør automatisk når der committes til main (fx når du ændrer koden)
+  push:
+    branches: [main]
+  # Manuelt fra Actions-fanen
   workflow_dispatch:
+  # Automatisk hver 15. minut
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/15 * * * *"
 
 permissions:
   contents: read
