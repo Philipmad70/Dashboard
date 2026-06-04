@@ -1,0 +1,51 @@
+name: Byg dashboard
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v4
+
+      - name: Opsæt Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer pakker
+        run: pip install -r requirements.txt
+
+      - name: Generér dashboardet
+        env:
+          CI: "true"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          CALENDAR_GMAIL_URL: ${{ secrets.CALENDAR_GMAIL_URL }}
+          CALENDAR_WORK_URL: ${{ secrets.CALENDAR_WORK_URL }}
+        run: python dashboard.py
+
+      - name: Klargør Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload output-mappen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: output
+
+      - name: Udgiv til GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
