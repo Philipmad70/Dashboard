@@ -78,6 +78,24 @@ def gemini(prompt, temp=0.5):
         return re.sub(r"```.*?```","",text,flags=re.DOTALL).strip()
     except urllib.error.HTTPError as e:
         print(f"  Gemini {e.code}: {e.read().decode()[:80]}"); return ""
+
+def gemini_grounded(prompt, temp=0.6):
+    """Gemini med Google Search, så den kan finde aktuelle begivenheder."""
+    try:
+        resp = post_json(GEMINI_URL, {
+            "contents": [{"role":"user","parts":[{"text":prompt}]}],
+            "tools": [{"google_search": {}}],
+            "generationConfig": {"temperature": temp},
+        })
+        text = "".join(p.get("text","") for p in
+            resp.get("candidates",[{}])[0].get("content",{}).get("parts",[]))
+        return re.sub(r"```.*?```","",text,flags=re.DOTALL).strip()
+    except urllib.error.HTTPError as e:
+        print(f"  Gemini (søg) {e.code}: {e.read().decode()[:80]}")
+        return ""
+    except Exception as e:
+        print(f"  Gemini (søg): {e}")
+        return ""
     except Exception as e:
         print(f"  Gemini: {e}"); return ""
 
@@ -269,24 +287,22 @@ def fetch_astronomy(now_local, lat=55.6761, lon=12.5683):
 # ═══════════════════════════════════════════════════════
 #  ✨ SJOVE FAKTA om dagen (AI-genereret)
 # ═══════════════════════════════════════════════════════
-def fetch_fun_facts(now_local, onthisday):
-    """Beder Gemini om et par sjove/interessante fakta om datoen."""
-    dato = f"{now_local.day}. {DK_MONTHS[now_local.month]}"
-    hist = ""
-    if onthisday:
-        hist = "Historiske begivenheder på denne dato:\n" + "\n".join(
-            f"- {e['year']}: {e['text']}" for e in onthisday[:6])
-    r = gemini(
-        f"Det er den {dato} i dag. {hist}\n\n"
-        f"Skriv 4-5 interessante og oplysende fakta knyttet til denne dato. "
-        f"Fokusér på substantielle ting: vigtige historiske begivenheder, "
-        f"videnskabelige opdagelser, kulturelle milepæle, kendte personers "
-        f"fødsels-/dødsdage, eller bemærkelsesværdige hændelser. "
-        f"UNDGÅ trivielle 'mærkedage' som 'national ostedag' eller lignende "
-        f"opfundne temadage. Vælg fakta en nysgerrig, veluddannet person "
-        f"ville finde værd at vide. Skriv på letforståeligt dansk. "
+def fetch_fun_facts(now_local, onthisday=None):
+    """Finder AKTUELLE interessante begivenheder der sker i dag (via søgning)."""
+    dato = f"{now_local.day}. {DK_MONTHS[now_local.month]} {now_local.year}"
+    r = gemini_grounded(
+        f"I dag er det {dato}. Brug søgning til at finde 4-5 aktuelle, "
+        f"interessante ting der sker eller er sket netop i dag eller for nylig "
+        f"— både i Danmark og i verden. "
+        f"Det kan fx være: politiske begivenheder (nye ministre, valg, lovforslag), "
+        f"vigtige sportsbegivenheder (kampe der spilles i dag, resultater), "
+        f"kultur, videnskab, økonomi, eller store internationale hændelser. "
+        f"Fokusér på NUTIDEN — ting der er relevante lige nu, IKKE historiske "
+        f"begivenheder fra tidligere år. "
+        f"Skriv på letforståeligt dansk. Hver ting som ét kort punkt. "
         f"Brug punktopstilling med <li>-tags inde i en <ul>. "
-        f"Ingen overskrift, kun listen. Ingen markdown.", 0.6)
+        f"Ingen overskrift, kun listen. Ingen markdown, ingen kildehenvisninger.", 0.5)
+    # Hvis søgning fejler, så lad feltet være tomt (ingen historiske dubletter)
     return r or ""
 
 def translate_onthisday(events):
@@ -1153,7 +1169,7 @@ def generate_html(day_summary, dk_prose, w_prose,
     funfacts_html = ""
     if funfacts:
         ff = safe_prose(funfacts)
-        funfacts_html = f'<div class="funfacts"><div class="mini-label">&#x2728; Interessante fakta om i dag</div>{ff}</div>'
+        funfacts_html = f'<div class="funfacts"><div class="mini-label">&#x2728; Sker i dag &mdash; Danmark &amp; verden</div>{ff}</div>'
 
     # ── "Skete på denne dag" — placeres under vejret, med klikbare links ──
     wiki = wiki or {"tfa": None, "onthisday": []}
@@ -1323,9 +1339,17 @@ def main():
     print("📚 Henter Wikipedia …")
     wiki=fetch_wikipedia_featured(now_local)
     # Oversæt "skete på denne dag" til dansk
-    wiki["onthisday"]=translate_onthisday(wiki.get("onthisday", [])[:8])
+    # Vælg et spredt udsnit på tværs af historien (ikke kun de nyeste)
+    _otd_all = wiki.get("onthisday", [])
+    if len(_otd_all) > 7:
+        # Sorteret nyeste->ældste; tag jævnt fordelte stik så vi får både gammelt og nyt
+        step = len(_otd_all) / 7.0
+        _otd_sel = [_otd_all[int(i*step)] for i in range(7)]
+    else:
+        _otd_sel = _otd_all
+    wiki["onthisday"]=translate_onthisday(_otd_sel)
     print("✨ Henter interessante fakta …")
-    funfacts=fetch_fun_facts(now_local, wiki.get("onthisday", []))
+    funfacts=fetch_fun_facts(now_local)
     print("🌤  Henter vejr …")
     wx_now,wx_forecast=fetch_weather()
     print("⚽ Henter fodbold …")
