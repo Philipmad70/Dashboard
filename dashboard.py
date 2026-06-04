@@ -83,15 +83,25 @@ def gemini(prompt, temp=0.5):
 
 def safe_prose(t):
     if not t: return ""
-    # Konverter Markdown-links [tekst](url) til rigtige <a>-tags
-    # (Gemini returnerer nogle gange Markdown i stedet for HTML)
-    t = re.sub(r'\[([^\]]+)\]\((https?://[^\s)]+)\)',
-        lambda m: f'<a href="{esc(m.group(2))}" target="_blank" rel="noopener">{esc(m.group(1))}</a>',
-        t)
+    def md_link(m):
+        txt = (m.group(1) or "").strip()
+        url = (m.group(2) or "").strip()
+        # Drop meningsløse links hvor teksten kun er tegnsætning/entity
+        # (fx Geminis "[\'](url)" — en kodet apostrof)
+        plain = re.sub(r'&[#a-zA-Z0-9]+;', '', txt)   # fjern HTML-entities
+        plain = re.sub(r'[^\w\sÆØÅæøå]', '', plain).strip()
+        if len(plain) < 2:
+            return txt   # behold kun teksten, smid linket væk
+        return f'<a href="{url}" target="_blank" rel="noopener">{txt}</a>'
+    # Konverter Markdown-links [tekst](url) til <a> (Gemini bruger nogle gange Markdown)
+    t = re.sub(r'\[([^\]]*)\]\((https?://[^\s)]+)\)', md_link, t)
+    # Normalisér eksisterende <a>-tags (uden at dobbelt-escape)
     s = re.sub(r'<a\s+href=["\']([^"\'<>]+)["\'][^>]*>(.*?)</a>',
-        lambda m: f'<a href="{esc(m.group(1))}" target="_blank" rel="noopener">{esc(m.group(2))}</a>',
+        lambda m: f'<a href="{m.group(1)}" target="_blank" rel="noopener">{m.group(2)}</a>',
         t, flags=re.DOTALL)
-    # Behold a, ul, li, span (til opsummering + overskriftsliste); strip resten
+    # Sidste sikkerhedsnet: fjern enhver resterende rå Markdown-link-syntaks
+    s = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', s)
+    # Behold a, ul, li, span, strong, b; strip resten
     return re.sub(r'<(?!/?(?:a|ul|li|span|strong|b)\b)[^>]+>','',s)
 
 # ═══════════════════════════════════════════════════════
