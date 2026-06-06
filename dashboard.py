@@ -285,8 +285,20 @@ def fetch_wikipedia_featured(now_local):
             "image":   thumb,
         }
 
-    # Historiske begivenheder "on this day"
-    for ev in (data.get("onthisday") or [])[:40]:
+    # Historiske begivenheder: brug Wikipedias KURATEREDE "selected"-liste
+    # (de vigtigste begivenheder, fx D-dag). Fald tilbage til den fulde liste.
+    onthisday_raw = []
+    try:
+        sel_url = (f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/"
+                   f"selected/{m:02d}/{d:02d}")
+        sel = json.loads(fetch_url(sel_url, headers=headers))
+        onthisday_raw = sel.get("selected", [])
+    except Exception as e:
+        print(f"  Wikipedia (selected): {e}")
+    if not onthisday_raw:
+        onthisday_raw = data.get("onthisday") or []
+
+    for ev in onthisday_raw[:40]:
         year = ev.get("year")
         text = ev.get("text", "")
         # Find et Wikipedia-link til begivenheden (første tilknyttede side)
@@ -297,7 +309,7 @@ def fetch_wikipedia_featured(now_local):
                 link = u; break
         if year and text:
             result["onthisday"].append({"year": year, "text": text, "url": link})
-    # Sortér nyeste først, og behold et udvalg
+    # Sortér nyeste først
     result["onthisday"].sort(key=lambda e: e["year"], reverse=True)
 
     print(f"  Wikipedia: artikel={'ja' if result['tfa'] else 'nej'}, "
@@ -1432,15 +1444,9 @@ def main():
     dk_prose,w_prose,wallnot_html=fetch_news()
     print("📚 Henter Wikipedia …")
     wiki=fetch_wikipedia_featured(now_local)
-    # Oversæt "skete på denne dag" til dansk
-    # Vælg et spredt udsnit på tværs af historien (ikke kun de nyeste)
-    _otd_all = wiki.get("onthisday", [])
-    if len(_otd_all) > 7:
-        # Sorteret nyeste->ældste; tag jævnt fordelte stik så vi får både gammelt og nyt
-        step = len(_otd_all) / 7.0
-        _otd_sel = [_otd_all[int(i*step)] for i in range(7)]
-    else:
-        _otd_sel = _otd_all
+    # "selected" er allerede Wikipedias kuraterede vigtigste begivenheder.
+    # Tag de første 7 (sorteret nyeste først) og oversæt til dansk.
+    _otd_sel = wiki.get("onthisday", [])[:7]
     wiki["onthisday"]=translate_onthisday(_otd_sel)
     print("🎨 Henter dagens kunstværk …")
     art=fetch_art(now_local)
