@@ -259,6 +259,39 @@ def fetch_art(now_local):
         print(f"  Kunst (fallback fejlede): {e}")
     return result
 
+def fetch_engelund(now_local):
+    """Henter danske historiske begivenheder fra engelund.dk for dagens dato."""
+    events = []
+    try:
+        slug = f"{now_local.day:02d}-{DK_MONTHS[now_local.month]}"
+        url = f"https://www.engelund.dk/dagen-i-dag/{slug}.htm"
+        raw = fetch_url(url, timeout=20)
+        # Siden er ISO-8859-1 (latin-1) kodet
+        html_txt = raw.decode("iso-8859-1", errors="replace")
+        # Begivenheder står som linjer: "ÅRSTAL - tekst" i afsnittet "Begivenheder"
+        # Find afsnittet mellem "Begivenheder" og "Født"/"Dødsfald"
+        start = html_txt.find("Begivenheder")
+        end = html_txt.find("F&oslash;dt")  # "Født"
+        if end == -1:
+            end = html_txt.find("Født")
+        chunk = html_txt[start:end] if start != -1 else html_txt
+        # Fjern HTML-tags og decode entities
+        chunk = re.sub(r"<[^>]+>", "\n", chunk)
+        chunk = html_module.unescape(chunk)
+        # Match linjer på formen "1944 - tekst" (årstal, bindestreg, tekst)
+        for m in re.finditer(r"(\d{3,4})\s*[-\u2013]\s*([^\n]+)", chunk):
+            year = int(m.group(1))
+            text = m.group(2).strip()
+            text = re.sub(r"\s+", " ", text)
+            if len(text) > 8 and not text.lower().startswith("dagen"):
+                events.append({"year": year, "text": text, "url": ""})
+        # Sortér nyeste først
+        events.sort(key=lambda e: e["year"], reverse=True)
+        print(f"  Engelund: {len(events)} begivenheder")
+    except Exception as e:
+        print(f"  Engelund: {e}")
+    return events
+
 def fetch_wikipedia_featured(now_local):
     """Henter dagens engelske Wikipedia-artikel + historiske begivenheder."""
     y, m, d = now_local.year, now_local.month, now_local.day
@@ -1444,10 +1477,19 @@ def main():
     dk_prose,w_prose,wallnot_html=fetch_news()
     print("📚 Henter Wikipedia …")
     wiki=fetch_wikipedia_featured(now_local)
-    # "selected" er allerede Wikipedias kuraterede vigtigste begivenheder.
-    # Tag de første 7 (sorteret nyeste først) og oversæt til dansk.
-    _otd_sel = wiki.get("onthisday", [])[:7]
-    wiki["onthisday"]=translate_onthisday(_otd_sel)
+    print("🇩🇰 Henter engelund.dk …")
+    engelund_events = fetch_engelund(now_local)
+    # Kombiner: ALLE fra engelund (danske + berømte, allerede på dansk) +
+    # et par ekstra fra Wikipedia (som har links til at læse mere).
+    # Wikipedia-begivenhederne oversættes; engelund er allerede dansk.
+    wiki_extra = translate_onthisday(wiki.get("onthisday", [])[:3])
+    # Undgå dubletter: drop wiki-begivenheder hvis årstallet allerede er i engelund
+    engelund_years = {e["year"] for e in engelund_events}
+    wiki_extra = [e for e in wiki_extra if e["year"] not in engelund_years]
+    # Saml: engelund først (nyeste først), derefter wiki-ekstra
+    combined = engelund_events + wiki_extra
+    combined.sort(key=lambda e: e["year"], reverse=True)
+    wiki["onthisday"] = combined
     print("🎨 Henter dagens kunstværk …")
     art=fetch_art(now_local)
     print("🌤  Henter vejr …")
