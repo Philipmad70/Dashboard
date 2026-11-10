@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_show"
+        android:shortcutId="show"
+        android:shortcutShortLabel="@string/sc_show">
+        <intent
+            android:action="dk.philip.laesop.SHOW"
+            android:targetClass="dk.philip.laesop.ToggleActivity"
+            android:targetPackage="dk.philip.laesop" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_hide"
+        android:shortcutId="hide"
+        android:shortcutShortLabel="@string/sc_hide">
+        <intent
+            android:action="dk.philip.laesop.HIDE"
+            android:targetClass="dk.philip.laesop.ToggleActivity"
+            android:targetPackage="dk.philip.laesop" />
+    </shortcut>
+</shortcuts>

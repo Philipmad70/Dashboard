@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Læs op</string>
+    <string name="service_name">Læs op – knap</string>
+    <string name="service_description">Viser en lille afspil-knap på skærmen. Når du trykker på den, læses teksten på skærmen højt med en Microsoft Azure-stemme. Teksten sendes til Azure for at blive lavet om til tale.</string>
+    <string name="widget_description">Vis eller skjul Læs op-knappen</string>
+    <string name="sc_toggle">Læs op</string>
+    <string name="sc_show">Vis knap</string>
+    <string name="sc_hide">Skjul knap</string>
+</resources>
